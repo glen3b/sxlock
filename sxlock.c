@@ -172,6 +172,8 @@ main_loop(Window w, GC gc, XFontStruct* font, WindowPositionInfo* info, char pas
 
     /* main event loop */
     while(running && !XNextEvent(dpy, &event)) {
+        DPMSEnable(dpy);
+
         if (sleepmode)
             DPMSForceLevel(dpy, DPMSModeOff);
 
@@ -472,6 +474,9 @@ main(int argc, char** argv) {
     /* restore dpms settings */
     DPMSSetTimeouts(dpy, dpms_original.standby, dpms_original.suspend, dpms_original.off);
     
+    /* ensure dpms enabled */
+    DPMSEnable(dpy);
+
     XUngrabPointer(dpy, CurrentTime);
     XFreeFont(dpy, font);
     XFreeGC(dpy, gc);
