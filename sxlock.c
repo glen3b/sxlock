@@ -73,7 +73,6 @@ static Bool  opt_hidelength;
 Display *dpy;
 Dpms dpms_original = { .state = True, .level = 0, .standby = 600, .suspend = 600, .off = 600 };  // holds original values
 int dpms_timeout = 10;  // dpms timeout until program exits
-Bool using_dpms;
 
 pam_handle_t *pam_handle;
 struct pam_conv conv = { conv_callback, NULL };
@@ -139,12 +138,7 @@ conv_callback(int num_msgs, const struct pam_message **msg, struct pam_response 
 void
 handle_signal(int sig) {
     /* restore dpms settings */
-    if (using_dpms) {
-        DPMSSetTimeouts(dpy, dpms_original.standby, dpms_original.suspend, dpms_original.off);
-        if (!dpms_original.state)
-            DPMSDisable(dpy);
-    }
-
+    DPMSSetTimeouts(dpy, dpms_original.standby, dpms_original.suspend, dpms_original.off);
     die("Caught signal %d; dying\n", sig);
 }
 
@@ -178,7 +172,7 @@ main_loop(Window w, GC gc, XFontStruct* font, WindowPositionInfo* info, char pas
 
     /* main event loop */
     while(running && !XNextEvent(dpy, &event)) {
-        if (sleepmode && using_dpms)
+        if (sleepmode)
             DPMSForceLevel(dpy, DPMSModeOff);
 
         /* update window if no events pending */
@@ -462,30 +456,22 @@ main(int argc, char** argv) {
     if (mlock(password, sizeof(password)) != 0)
         die("Could not lock page in memory, check RLIMIT_MEMLOCK\n");
 
-    /* handle dpms */
-    using_dpms = DPMSCapable(dpy);
-    if (using_dpms) {
-        /* save dpms timeouts to restore on exit */
-        DPMSGetTimeouts(dpy, &dpms_original.standby, &dpms_original.suspend, &dpms_original.off);
-        DPMSInfo(dpy, &dpms_original.level, &dpms_original.state);
+    /* save dpms timeouts to restore on exit */
+    DPMSGetTimeouts(dpy, &dpms_original.standby, &dpms_original.suspend, &dpms_original.off);
+    DPMSInfo(dpy, &dpms_original.level, &dpms_original.state);
 
-        /* set program specific dpms timeouts */
-        DPMSSetTimeouts(dpy, dpms_timeout, dpms_timeout, dpms_timeout);
+    /* set program specific dpms timeouts */
+    DPMSSetTimeouts(dpy, dpms_timeout, dpms_timeout, dpms_timeout);
 
-        /* force dpms enabled until exit */
-        DPMSEnable(dpy);
-    }
+    /* ensure dpms enabled */
+    DPMSEnable(dpy);
 
     /* run main loop */
     main_loop(w, gc, font, &info, passdisp, opt_username, black, white, red, opt_hidelength);
 
     /* restore dpms settings */
-    if (using_dpms) {
-        DPMSSetTimeouts(dpy, dpms_original.standby, dpms_original.suspend, dpms_original.off);
-        if (!dpms_original.state)
-            DPMSDisable(dpy);
-    }
-
+    DPMSSetTimeouts(dpy, dpms_original.standby, dpms_original.suspend, dpms_original.off);
+    
     XUngrabPointer(dpy, CurrentTime);
     XFreeFont(dpy, font);
     XFreeGC(dpy, gc);
